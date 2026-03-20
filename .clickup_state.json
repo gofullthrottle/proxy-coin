@@ -1,0 +1,15 @@
+{
+  "space_id": "90144650030",
+  "space_name": "[AI] proxy-coin",
+  "team_id": "42051537",
+  "created": "2026-03-19T23:15:53.041491",
+  "git": {
+    "has_remote": true,
+    "remote_url": "git@github.com:gofullthrottle/proxy-coin.git",
+    "provider": "github",
+    "owner": "gofullthrottle",
+    "repo": "proxy-coin"
+  },
+  "settings": {},
+  "gantt_project_id": null
+}

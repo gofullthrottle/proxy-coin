@@ -2,6 +2,11 @@
 
 Decentralized bandwidth and compute marketplace. Android app that rewards users with PRXY tokens (ERC-20 on Base L2) for sharing device resources — primarily network bandwidth for proxied traffic, secondarily processing power via WASM.
 
+
+## ClickUp Integration
+
+@.clickup_state.json
+
 ## Project Structure
 
 ```
