@@ -1,0 +1,174 @@
+# =============================================================================
+# CI/CD Workflow - STANDARD TIER
+# =============================================================================
+# Comprehensive CI/CD with dev branch, dual SonarQube, and E2E testing
+# Template Version: 1.0.0
+# =============================================================================
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - dev
+  pull_request:
+    branches:
+      - main
+      - master
+      - dev
+
+env:
+  NODE_ENV: test
+
+jobs:
+  # ===========================================================================
+  # QUALITY CIRCUIT
+  # ===========================================================================
+  quality-circuit:
+    name: Quality Circuit
+    runs-on: [self-hosted, sonarqube]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # --- Language-specific setup (uncomment as needed) ---
+
+      # Node.js
+      # - name: Setup Node.js
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '20'
+      #     cache: 'npm'
+      #
+      # - name: Install dependencies
+      #   run: npm ci
+      #
+      # - name: Lint
+      #   run: npm run lint
+      #
+      # - name: Type Check
+      #   run: npm run typecheck
+      #
+      # - name: Unit Tests
+      #   run: npm run test -- --coverage
+      #
+      # - name: Build
+      #   run: npm run build
+
+      # Python
+      # - name: Setup Python
+      #   uses: actions/setup-python@v5
+      #   with:
+      #     python-version: '3.12'
+      #
+      # - name: Install dependencies
+      #   run: |
+      #     pip install uv
+      #     uv sync
+      #
+      # - name: Lint
+      #   run: uv run ruff check .
+      #
+      # - name: Type Check
+      #   run: uv run mypy .
+      #
+      # - name: Unit Tests
+      #   run: uv run pytest --cov --cov-report=xml
+
+      - name: Quality circuit placeholder
+        run: echo "Configure language-specific steps above"
+
+  # ===========================================================================
+  # SONARQUBE ANALYSIS
+  # ===========================================================================
+  sonarqube:
+    name: SonarQube Analysis
+    runs-on: [self-hosted, sonarqube]
+    needs: quality-circuit
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine SonarQube Config
+        id: sonar-config
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
+            echo "config=.sonarqube/sonar-prod.properties" >> $GITHUB_OUTPUT
+            echo "Using PRODUCTION SonarQube configuration"
+          else
+            echo "config=.sonarqube/sonar-dev.properties" >> $GITHUB_OUTPUT
+            echo "Using DEVELOPMENT SonarQube configuration"
+          fi
+
+      - name: SonarQube Scan
+        run: |
+          sonar-scanner \
+            -Dproject.settings=${{ steps.sonar-config.outputs.config }} \
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+            -Dsonar.token=${{ secrets.SONAR_TOKEN }}
+
+  # ===========================================================================
+  # E2E TESTS (Dev branch only)
+  # ===========================================================================
+  e2e-tests:
+    name: E2E Tests
+    runs-on: [self-hosted, sonarqube]
+    needs: quality-circuit
+    if: github.ref == 'refs/heads/dev'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # --- Playwright E2E (uncomment and configure) ---
+      # - name: Setup Node.js
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '20'
+      #
+      # - name: Install dependencies
+      #   run: npm ci
+      #
+      # - name: Install Playwright browsers
+      #   run: npx playwright install --with-deps
+      #
+      # - name: Run E2E tests
+      #   run: npm run test:e2e
+      #
+      # - name: Upload test results
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: playwright-report
+      #     path: playwright-report/
+      #     retention-days: 7
+
+      - name: E2E placeholder
+        run: echo "Configure E2E tests above"
+
+  # ===========================================================================
+  # PROMOTION CHECK (PR to main only)
+  # ===========================================================================
+  promotion-check:
+    name: Promotion Quality Gate
+    runs-on: [self-hosted, sonarqube]
+    needs: [sonarqube, e2e-tests]
+    if: github.event_name == 'pull_request' && (github.base_ref == 'main' || github.base_ref == 'master')
+
+    steps:
+      - name: Verify Quality Gates
+        run: |
+          echo "All quality gates passed:"
+          echo "  - Quality Circuit: PASSED"
+          echo "  - SonarQube: PASSED"
+          echo "  - E2E Tests: PASSED"
+          echo ""
+          echo "PR is ready for review and merge."
