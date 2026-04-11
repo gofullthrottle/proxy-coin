@@ -1,0 +1,185 @@
+# Full-stack Docker Compose for Proxy Coin.
+# Build individual services with the SERVICE build arg:
+#   docker compose build --build-arg SERVICE=orchestrator
+#   docker compose build --build-arg SERVICE=api
+#   docker compose build --build-arg SERVICE=metering
+#
+# Start everything:
+#   docker compose up -d
+#
+# Configuration:
+#   Copy .env.example → .env and fill in production values before deploying.
+#   Never commit a populated .env file.
+
+services:
+  # ---------------------------------------------------------------------------
+  # Infrastructure: PostgreSQL + Redis
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: proxycoin-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-proxycoin}
+      POSTGRES_USER: ${POSTGRES_USER:-proxycoin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../backend/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-proxycoin} -d ${POSTGRES_DB:-proxycoin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - proxycoin
+
+  redis:
+    image: redis:7-alpine
+    container_name: proxycoin-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-changeme}
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - proxycoin
+
+  # ---------------------------------------------------------------------------
+  # Orchestrator — WebSocket node registry + proxy dispatcher (port 8080)
+  # ---------------------------------------------------------------------------
+  orchestrator:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: orchestrator
+    image: proxycoin/orchestrator:latest
+    container_name: proxycoin-orchestrator
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SERVICE_NAME: orchestrator
+      PORT: "8080"
+      POSTGRES_DSN: "postgresql://${POSTGRES_USER:-proxycoin}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-proxycoin}?sslmode=disable"
+      REDIS_URL: "redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Proxy request defaults
+      PROXY_REQUEST_TIMEOUT_MS: ${PROXY_REQUEST_TIMEOUT_MS:-30000}
+      # JWT signing key (generate with: openssl rand -hex 32)
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - proxycoin
+
+  # ---------------------------------------------------------------------------
+  # API — Customer-facing REST API (port 8081)
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: api
+    image: proxycoin/api:latest
+    container_name: proxycoin-api
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      SERVICE_NAME: api
+      PORT: "8081"
+      POSTGRES_DSN: "postgresql://${POSTGRES_USER:-proxycoin}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-proxycoin}?sslmode=disable"
+      REDIS_URL: "redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0"
+      ORCHESTRATOR_URL: "http://orchestrator:8080"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      # Rate limiting
+      RATE_LIMIT_WINDOW_SECS: ${RATE_LIMIT_WINDOW_SECS:-60}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-100}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      orchestrator:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - proxycoin
+
+  # ---------------------------------------------------------------------------
+  # Metering — Reward calculation and Redis Stream consumer (port 8082)
+  # ---------------------------------------------------------------------------
+  metering:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: metering
+    image: proxycoin/metering:latest
+    container_name: proxycoin-metering
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      SERVICE_NAME: metering
+      PORT: "8082"
+      POSTGRES_DSN: "postgresql://${POSTGRES_USER:-proxycoin}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-proxycoin}?sslmode=disable"
+      REDIS_URL: "redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Reward calculation
+      EPOCH_INTERVAL_SECS: ${EPOCH_INTERVAL_SECS:-3600}
+      METERING_CONSUMER_GROUP: ${METERING_CONSUMER_GROUP:-reward-pipeline}
+      METERING_BATCH_SIZE: ${METERING_BATCH_SIZE:-100}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - proxycoin
+
+# ---------------------------------------------------------------------------
+# Volumes
+# ---------------------------------------------------------------------------
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local
+
+# ---------------------------------------------------------------------------
+# Networks
+# ---------------------------------------------------------------------------
+networks:
+  proxycoin:
+    driver: bridge
