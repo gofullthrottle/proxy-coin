@@ -39,3 +39,31 @@ Temporary Items
 
 # Built Visual Studio Code Extensions
 *.vsix
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Go
+backend/bin/
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+
+# Contracts
+contracts/out/
+contracts/cache/
+
+# IDE
+.idea/
+*.iml
+
+# OS
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
