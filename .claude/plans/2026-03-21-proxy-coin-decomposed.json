@@ -1,0 +1,1854 @@
+{
+  "goal": "Build Proxy Coin — decentralized bandwidth marketplace with Android app, Go backend, Solidity smart contracts, and Base L2 token",
+  "source_plan": ".claude/plans/2026-03-21-proxy-coin-full-implementation.md",
+  "created_at": "2026-03-21T00:00:00Z",
+  "project": "proxy-coin",
+  "waves": [
+    {
+      "id": 1,
+      "name": "Project Scaffolding",
+      "phase": 0,
+      "description": "Scaffold all 4 subsystems, no dependencies",
+      "depends_on": []
+    },
+    {
+      "id": 2,
+      "name": "Foundation Layer",
+      "phase": 0,
+      "description": "Compile protocol, setup config/DB/navigation",
+      "depends_on": [1]
+    },
+    {
+      "id": 3,
+      "name": "Backend Orchestrator Core",
+      "phase": 1,
+      "description": "Node registry, WebSocket server, Redis, metering publisher",
+      "depends_on": [2]
+    },
+    {
+      "id": 4,
+      "name": "Android Core Services",
+      "phase": 1,
+      "description": "Foreground service, WebSocket client, proxy engine, resource monitor",
+      "depends_on": [2]
+    },
+    {
+      "id": 5,
+      "name": "Integration + Points",
+      "phase": 1,
+      "description": "End-to-end proxy flow, points ledger, test harness",
+      "depends_on": [3, 4]
+    },
+    {
+      "id": 6,
+      "name": "HTTPS + Security",
+      "phase": 2,
+      "description": "HTTPS CONNECT tunnel, domain blocklist, server-side metering",
+      "depends_on": [5]
+    },
+    {
+      "id": 7,
+      "name": "Attestation + Monitoring",
+      "phase": 2,
+      "description": "Play Integrity, enhanced resource monitor, config push",
+      "depends_on": [5]
+    },
+    {
+      "id": 8,
+      "name": "Android UI",
+      "phase": 2,
+      "description": "Dashboard, earnings, settings screens",
+      "depends_on": [6, 7]
+    },
+    {
+      "id": 9,
+      "name": "Smart Contracts",
+      "phase": 3,
+      "description": "ProxyCoinToken, RewardDistributor, Staking, Vesting contracts",
+      "depends_on": [1]
+    },
+    {
+      "id": 10,
+      "name": "Contract Testing + Deploy",
+      "phase": 3,
+      "description": "Full test suite, fuzz tests, Base Sepolia deployment",
+      "depends_on": [9]
+    },
+    {
+      "id": 11,
+      "name": "Wallet + Merkle Backend",
+      "phase": 3,
+      "description": "WalletManager, KeystoreHelper, reward calculator, Merkle generator",
+      "depends_on": [8, 10]
+    },
+    {
+      "id": 12,
+      "name": "Claim Flow + Wallet UI",
+      "phase": 3,
+      "description": "Merkle publisher, claim proof API, wallet screen, onboarding",
+      "depends_on": [11]
+    },
+    {
+      "id": 13,
+      "name": "Customer API",
+      "phase": 4,
+      "description": "Customer auth, proxy endpoints, usage tracking, rate limiting",
+      "depends_on": [8]
+    },
+    {
+      "id": 14,
+      "name": "Anti-Fraud + Trust",
+      "phase": 4,
+      "description": "Fraud detector, IP intelligence, behavioral analysis, trust scoring",
+      "depends_on": [8]
+    },
+    {
+      "id": 15,
+      "name": "Beta Features",
+      "phase": 4,
+      "description": "Onboarding, referrals, billing, geo-targeting, sticky sessions",
+      "depends_on": [13, 14]
+    },
+    {
+      "id": 16,
+      "name": "Polish + Production",
+      "phase": 4,
+      "description": "Security hardening, release build, API gateway, deployment, docs, E2E",
+      "depends_on": [15]
+    }
+  ],
+  "features": [
+    {
+      "id": "1.1",
+      "name": "Protocol: Create protobuf definitions",
+      "wave": 1,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "infrastructure",
+      "depends_on": [],
+      "acceptance_criteria": [
+        "node.proto with Register, Registered, Heartbeat, ConfigUpdate, EarningsUpdate messages",
+        "proxy.proto with ProxyRequest, ProxyResponseStart, ProxyResponseChunk, ProxyResponseEnd messages",
+        "metering.proto with MeteringEvent, MeteringReport messages",
+        "All messages use proto3 syntax with appropriate field types"
+      ],
+      "technical_notes": "Reference ARCHITECTURE.md data flow section for message types. Use proto3 syntax. Package: proxycoin.protocol.v1"
+    },
+    {
+      "id": "1.2",
+      "name": "Backend: Init Go module + project structure",
+      "wave": 1,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": [],
+      "acceptance_criteria": [
+        "go.mod with Go 1.22+ and module path github.com/gofullthrottle/proxy-coin/backend",
+        "cmd/{orchestrator,api,metering}/main.go entry points",
+        "internal/ packages: node, proxy, websocket, metering, reward, fraud, auth, customer, config",
+        "pkg/ packages: protocol, blockchain",
+        "Makefile with build, test, lint, proto-gen targets",
+        "go build ./... compiles without errors"
+      ],
+      "technical_notes": "Follow standard Go project layout. Use cmd/ for binaries, internal/ for private packages, pkg/ for importable packages."
+    },
+    {
+      "id": "1.3",
+      "name": "Android: Init Gradle project + Hilt DI",
+      "wave": 1,
+      "priority": 1,
+      "complexity": "complex",
+      "estimated_hours": 3,
+      "agent": "android",
+      "depends_on": [],
+      "acceptance_criteria": [
+        "android/ directory with proper Gradle project structure",
+        "build.gradle.kts with all dependencies from ANDROID-APP.md libs.versions.toml",
+        "ProxyCoinApp.kt application class with @HiltAndroidApp",
+        "Hilt modules: AppModule, NetworkModule, DatabaseModule, CryptoModule",
+        "AndroidManifest.xml with all required permissions",
+        "compileSdk 35, minSdk 26, targetSdk 35",
+        "Gradle sync succeeds without errors"
+      ],
+      "technical_notes": "Use version catalog (libs.versions.toml). Kotlin 2.0.21, Compose BOM 2024.12.01, Hilt 2.51.1."
+    },
+    {
+      "id": "1.4",
+      "name": "Contracts: Init Foundry project",
+      "wave": 1,
+      "priority": 2,
+      "complexity": "simple",
+      "estimated_hours": 1,
+      "agent": "contracts",
+      "depends_on": [],
+      "acceptance_criteria": [
+        "foundry.toml per SMART-CONTRACTS.md (solc 0.8.24, optimizer 200 runs, cancun EVM)",
+        "OpenZeppelin contracts installed via forge install",
+        "remappings.txt configured",
+        "Empty contract stubs in src/",
+        "forge build succeeds"
+      ],
+      "technical_notes": "Fuzz runs = 1000. RPC endpoints for base_sepolia and base_mainnet. Etherscan config for verification."
+    },
+    {
+      "id": "1.5",
+      "name": "Infrastructure: Docker Compose dev environment",
+      "wave": 1,
+      "priority": 1,
+      "complexity": "simple",
+      "estimated_hours": 1,
+      "agent": "infrastructure",
+      "depends_on": [],
+      "acceptance_criteria": [
+        "infrastructure/docker-compose.dev.yml with PostgreSQL 16 + Redis 7",
+        "PostgreSQL: proxycoin DB, proxycoin user, health check",
+        "Redis: health check, port 6379 exposed",
+        "Named volumes for data persistence",
+        "docker-compose up starts both services successfully"
+      ],
+      "technical_notes": "Use alpine images for smaller size. Add .env.example with default values."
+    },
+    {
+      "id": "1.6",
+      "name": "Scripts: Protobuf generation script",
+      "wave": 1,
+      "priority": 1,
+      "complexity": "simple",
+      "estimated_hours": 1,
+      "agent": "infrastructure",
+      "depends_on": [],
+      "acceptance_criteria": [
+        "scripts/generate-proto.sh compiles all .proto files",
+        "Go output to backend/pkg/protocol/",
+        "Kotlin lite output to android/app/src/main/java/.../protocol/",
+        "Script is executable and documented"
+      ],
+      "technical_notes": "Requires protoc, protoc-gen-go, protoc-gen-kotlin. Add check for dependencies at script start."
+    },
+    {
+      "id": "2.1",
+      "name": "Protocol: Compile + verify generated code",
+      "wave": 2,
+      "priority": 1,
+      "complexity": "simple",
+      "estimated_hours": 1,
+      "agent": "infrastructure",
+      "depends_on": ["1.1", "1.6"],
+      "acceptance_criteria": [
+        "generate-proto.sh runs cleanly",
+        "Go code generated in backend/pkg/protocol/",
+        "Kotlin code generated for Android",
+        "Generated code compiles in both Go and Kotlin projects"
+      ],
+      "technical_notes": "Run script, verify output, fix any protoc issues."
+    },
+    {
+      "id": "2.2",
+      "name": "Backend: Config package",
+      "wave": 2,
+      "priority": 1,
+      "complexity": "simple",
+      "estimated_hours": 1,
+      "agent": "backend",
+      "depends_on": ["1.2"],
+      "acceptance_criteria": [
+        "internal/config/config.go with Config struct",
+        "Loads from env vars: DATABASE_URL, REDIS_URL, BASE_RPC_URL, LISTEN_ADDR, WS_ADDR, JWT_SECRET",
+        "Sensible defaults for development",
+        "Validation of required fields"
+      ],
+      "technical_notes": "Use envconfig or manual os.Getenv. Keep it simple, no YAML config files."
+    },
+    {
+      "id": "2.3",
+      "name": "Backend: Database migrations",
+      "wave": 2,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["1.2", "1.5"],
+      "acceptance_criteria": [
+        "migrations/001_initial.up.sql with all 7 tables from BACKEND.md",
+        "Tables: nodes, metering (partitioned), earnings, claimable_rewards, customers, customer_usage, fraud_events, referrals",
+        "All indexes from BACKEND.md schema",
+        "migrations/001_initial.down.sql for rollback",
+        "Migrations apply successfully against Docker Postgres"
+      ],
+      "technical_notes": "Use golang-migrate for migration runner. Partition setup for metering table. Include referrals table."
+    },
+    {
+      "id": "2.4",
+      "name": "Android: Navigation + base screens",
+      "wave": 2,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "android",
+      "depends_on": ["1.3"],
+      "acceptance_criteria": [
+        "NavGraph.kt with routes for all 6 screens",
+        "Empty Composable stubs for each screen",
+        "Bottom navigation bar (Home, Earn, Wallet, Settings)",
+        "Theme applied (Color.kt, Type.kt, Theme.kt)",
+        "App launches and navigates between screens"
+      ],
+      "technical_notes": "Use Compose Navigation. Material3 bottom nav. Define routes as sealed class."
+    },
+    {
+      "id": "2.5",
+      "name": "Android: Room database setup",
+      "wave": 2,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "android",
+      "depends_on": ["1.3"],
+      "acceptance_criteria": [
+        "AppDatabase.kt with 3 entities per ANDROID-APP.md",
+        "EarningsEntity, MeteringEntity, TransactionEntity with all fields",
+        "EarningsDao, MeteringDao, TransactionDao with CRUD queries",
+        "DatabaseModule providing database instance via Hilt",
+        "Database created successfully on app launch"
+      ],
+      "technical_notes": "Room version from libs.versions.toml. Use KSP for Room compiler."
+    },
+    {
+      "id": "2.6",
+      "name": "Android: Network module",
+      "wave": 2,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "android",
+      "depends_on": ["1.3"],
+      "acceptance_criteria": [
+        "ApiService.kt interface with all endpoints from ANDROID-APP.md",
+        "OkHttpClient with logging interceptor in NetworkModule",
+        "Retrofit instance configured for JSON + protobuf",
+        "AuthInterceptor skeleton (adds JWT to requests)",
+        "Base URL configurable via BuildConfig"
+      ],
+      "technical_notes": "Use Moshi or Kotlinx Serialization for JSON. Protobuf converter for binary endpoints."
+    },
+    {
+      "id": "3.1",
+      "name": "Backend: Node registry",
+      "wave": 3,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "backend",
+      "depends_on": ["2.2", "2.3"],
+      "acceptance_criteria": [
+        "internal/node/registry.go with NodeRegistry struct",
+        "RegisterNode, UpdateHeartbeat, GetByID, FindByFilter methods",
+        "NodeFilter supports: country, region, status, min trust_score, network_type",
+        "Uses pgx for database operations",
+        "Unit tests with mock DB or test containers"
+      ],
+      "technical_notes": "Node struct matches BACKEND.md schema exactly. Use pgx/v5 with connection pool."
+    },
+    {
+      "id": "3.2",
+      "name": "Backend: Node selector algorithm",
+      "wave": 3,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["3.1"],
+      "acceptance_criteria": [
+        "internal/node/selector.go with SelectNode(req ProxyRequest) method",
+        "Filter → Score → Weighted random from top 5 per BACKEND.md algorithm",
+        "Score weights: trust 0.4, load 0.3, residential 0.2, uptime 0.1",
+        "Returns ErrNoAvailableNodes when no candidates",
+        "Unit tests with various node configurations"
+      ],
+      "technical_notes": "Weighted random selection prevents overloading single best node."
+    },
+    {
+      "id": "3.3",
+      "name": "Backend: WebSocket server",
+      "wave": 3,
+      "priority": 1,
+      "complexity": "complex",
+      "estimated_hours": 4,
+      "agent": "backend",
+      "depends_on": ["2.1", "2.2"],
+      "acceptance_criteria": [
+        "internal/websocket/server.go with HTTP upgrade handler at /ws",
+        "Protobuf message deserialization for all message types",
+        "REGISTER/REGISTERED handshake flow",
+        "HEARTBEAT handling (30s interval, timeout detection)",
+        "Connection tracking in sync.Map (nodeID → Connection)",
+        "Graceful shutdown with connection draining",
+        "Integration test with WebSocket client"
+      ],
+      "technical_notes": "Use gorilla/websocket. Each connection gets read/write goroutines. SendCh for outbound messages."
+    },
+    {
+      "id": "3.4",
+      "name": "Backend: Connection pool + message routing",
+      "wave": 3,
+      "priority": 1,
+      "complexity": "complex",
+      "estimated_hours": 3,
+      "agent": "backend",
+      "depends_on": ["3.3"],
+      "acceptance_criteria": [
+        "internal/websocket/pool.go managing all connections",
+        "internal/websocket/connection.go with Connection struct",
+        "ActiveReqs sync.Map tracking pending requests per connection",
+        "Route PROXY_RESPONSE messages to waiting request channels",
+        "Back-pressure when node exceeds max_concurrent",
+        "Connection health monitoring"
+      ],
+      "technical_notes": "Use channels for request/response correlation. Each pending request gets a response channel with timeout."
+    },
+    {
+      "id": "3.5",
+      "name": "Backend: Redis integration",
+      "wave": 3,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["2.2"],
+      "acceptance_criteria": [
+        "Redis client configured in AppModule",
+        "Node status keys: node:{id}:status, node:{id}:requests, node:{id}:heartbeat",
+        "Session stickiness: session:{id} → nodeID with 5min TTL",
+        "WebSocket mapping: ws:{id} → server instance",
+        "All key patterns match BACKEND.md Redis Usage section"
+      ],
+      "technical_notes": "Use go-redis/v9. Connection pool with health checks."
+    },
+    {
+      "id": "3.6",
+      "name": "Backend: Metering event publisher",
+      "wave": 3,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["3.5"],
+      "acceptance_criteria": [
+        "internal/metering/reporter.go publishing to Redis Stream metering_events",
+        "MeteringEvent struct with all fields from BACKEND.md",
+        "Published after each proxy response completes",
+        "Consumer group setup for Metering Service",
+        "Unit test verifying event format"
+      ],
+      "technical_notes": "Use XADD for publishing, XREADGROUP for consuming in Metering Service."
+    },
+    {
+      "id": "4.1",
+      "name": "Android: ProxyForegroundService",
+      "wave": 4,
+      "priority": 1,
+      "complexity": "complex",
+      "estimated_hours": 4,
+      "agent": "android",
+      "depends_on": ["2.4"],
+      "acceptance_criteria": [
+        "Persistent foreground service with dataSync type",
+        "Notification channel with connection status",
+        "START_STICKY return for restart on kill",
+        "WakeLock and WifiLock acquisition/release",
+        "Lifecycle: create notification → start foreground → connect WebSocket → listen",
+        "Notification updated every 30s with stats",
+        "Service starts/stops cleanly without leaks"
+      ],
+      "technical_notes": "Use Hilt @AndroidEntryPoint. Inject WebSocketClient, ProxyEngine, ResourceMonitor. Coroutine scope tied to service lifecycle."
+    },
+    {
+      "id": "4.2",
+      "name": "Android: WebSocketClient",
+      "wave": 4,
+      "priority": 1,
+      "complexity": "complex",
+      "estimated_hours": 4,
+      "agent": "android",
+      "depends_on": ["2.1", "2.6"],
+      "acceptance_criteria": [
+        "OkHttp WebSocket connecting to wss:// backend",
+        "Protobuf serialization/deserialization for all message types",
+        "REGISTER with device info on connect",
+        "Handle REGISTERED response with config",
+        "Heartbeat every 30s",
+        "Exponential backoff reconnect: 1s→2s→4s→8s→16s→30s max",
+        "Jitter to prevent thundering herd",
+        "Session resume within 30s window",
+        "Route PROXY_REQUEST to ProxyEngine callback"
+      ],
+      "technical_notes": "Use OkHttp WebSocket API. State machine: connecting→connected→reconnecting→disconnected. Coroutine-based."
+    },
+    {
+      "id": "4.3",
+      "name": "Android: ProxyEngine",
+      "wave": 4,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "android",
+      "depends_on": ["4.2"],
+      "acceptance_criteria": [
+        "Execute HTTP requests from device network for each PROXY_REQUEST",
+        "Stream response back: ProxyResponseStart → ProxyResponseChunk[] → ProxyResponseEnd",
+        "64KB chunk size for streaming",
+        "Semaphore for concurrent request limit (default 5)",
+        "30s timeout per request (configurable)",
+        "10MB max response size",
+        "Error handling: timeout, DNS failure, connection refused",
+        "Placeholder domain blocklist check"
+      ],
+      "technical_notes": "Use separate OkHttpClient from API client (no auth interceptor). Stream response body."
+    },
+    {
+      "id": "4.4",
+      "name": "Android: ResourceMonitor",
+      "wave": 4,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "android",
+      "depends_on": ["2.4"],
+      "acceptance_criteria": [
+        "Monitor battery level via BatteryManager",
+        "Monitor charging state",
+        "Monitor network type via ConnectivityManager (WiFi/cellular/metered)",
+        "Emit ResourceState via Flow every 10s",
+        "ProxyForegroundService pauses proxy when thresholds exceeded",
+        "Configurable thresholds from DataStore"
+      ],
+      "technical_notes": "Use BroadcastReceiver for battery changes. ConnectivityManager.NetworkCallback for network changes."
+    },
+    {
+      "id": "4.5",
+      "name": "Android: BootReceiver",
+      "wave": 4,
+      "priority": 2,
+      "complexity": "simple",
+      "estimated_hours": 1,
+      "agent": "android",
+      "depends_on": ["4.1"],
+      "acceptance_criteria": [
+        "BroadcastReceiver for BOOT_COMPLETED",
+        "Starts ProxyForegroundService if user had it enabled",
+        "Registered in AndroidManifest",
+        "Respects auto-start preference from DataStore"
+      ],
+      "technical_notes": "Simple receiver, check preference before starting service."
+    },
+    {
+      "id": "4.6",
+      "name": "Android: MeteringService",
+      "wave": 4,
+      "priority": 2,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "android",
+      "depends_on": ["2.5", "4.3"],
+      "acceptance_criteria": [
+        "Record bytes_in, bytes_out, latency_ms, success per request in Room DB",
+        "MeteringEntity with all fields",
+        "Periodic batch report to POST /v1/metering/report",
+        "WorkManager for periodic uploads"
+      ],
+      "technical_notes": "Supplementary to server-side metering. Use WorkManager PeriodicWorkRequest."
+    },
+    {
+      "id": "5.1",
+      "name": "Backend: Proxy request handler",
+      "wave": 5,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "backend",
+      "depends_on": ["3.2", "3.4"],
+      "acceptance_criteria": [
+        "internal/proxy/handler.go receiving proxy requests",
+        "Call NodeSelector to find optimal node",
+        "Send PROXY_REQUEST via WebSocket to selected node",
+        "Wait for response with configurable timeout",
+        "Handle: node unavailable, timeout, partial response, error",
+        "Return complete response to caller"
+      ],
+      "technical_notes": "Use context with timeout. Channel-based response collection from connection pool."
+    },
+    {
+      "id": "5.2",
+      "name": "Backend: Proxy response handler",
+      "wave": 5,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["3.4", "3.6"],
+      "acceptance_criteria": [
+        "Assemble streamed ProxyResponseChunks into complete response",
+        "Forward assembled response to waiting handler",
+        "Record MeteringEvent on completion",
+        "Handle partial responses and out-of-order chunks",
+        "Timeout if chunks stop arriving"
+      ],
+      "technical_notes": "Buffer chunks by request_id. Use chunk_index for ordering."
+    },
+    {
+      "id": "5.3",
+      "name": "Backend: Points ledger",
+      "wave": 5,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["2.3", "3.6"],
+      "acceptance_criteria": [
+        "Simple PostgreSQL points tracking (no blockchain)",
+        "Insert earnings records per node per hour",
+        "GET /v1/earnings returns earnings for a node (date range filter)",
+        "GET /v1/earnings/summary returns totals (today, all-time)",
+        "Points accumulate but are not yet claimable on-chain"
+      ],
+      "technical_notes": "Use earnings table. Aggregate from metering events. Simple reward formula: bytes * rate."
+    },
+    {
+      "id": "5.4",
+      "name": "Android: Basic settings",
+      "wave": 5,
+      "priority": 2,
+      "complexity": "simple",
+      "estimated_hours": 2,
+      "agent": "android",
+      "depends_on": ["4.1", "4.4"],
+      "acceptance_criteria": [
+        "Settings screen with WiFi-only toggle (default on)",
+        "On/off switch for proxy service",
+        "Bandwidth usage display",
+        "Settings persisted in DataStore",
+        "ProxyForegroundService reads settings reactively via Flow"
+      ],
+      "technical_notes": "Use DataStore Preferences. Compose Switch and Slider components."
+    },
+    {
+      "id": "5.5",
+      "name": "Integration: End-to-end test harness",
+      "wave": 5,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "backend",
+      "depends_on": ["5.1", "5.2"],
+      "acceptance_criteria": [
+        "Test script or Go test that validates full proxy flow",
+        "Start backend, simulate node WebSocket connection",
+        "Send proxy request to known URL (e.g., httpbin.org/get)",
+        "Verify response matches direct request",
+        "Test multiple concurrent requests",
+        "Measure and report latency overhead",
+        "Report success rate"
+      ],
+      "technical_notes": "Can be Go integration test or shell script. Mock the Android node with a Go WebSocket client."
+    },
+    {
+      "id": "5.6",
+      "name": "Infrastructure: Full dev Docker Compose",
+      "wave": 5,
+      "priority": 2,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "infrastructure",
+      "depends_on": ["5.1"],
+      "acceptance_criteria": [
+        "infrastructure/docker-compose.yml with all 3 backend services",
+        "Orchestrator, API, Metering services with Dockerfiles",
+        "Volume mounts for code hot-reload",
+        "Health checks for all services",
+        "Single docker-compose up starts everything",
+        "Environment variables configured via .env"
+      ],
+      "technical_notes": "Multi-stage Dockerfile for Go. Mount source code for dev. Use Air or similar for hot reload."
+    },
+    {
+      "id": "6.1",
+      "name": "Backend: HTTPS CONNECT tunnel",
+      "wave": 6,
+      "priority": 1,
+      "complexity": "complex",
+      "estimated_hours": 4,
+      "agent": "backend",
+      "depends_on": ["5.1"],
+      "acceptance_criteria": [
+        "Handle CONNECT method proxy requests",
+        "Establish TCP tunnel through WebSocket to Android node",
+        "Node opens TLS connection to destination",
+        "Relay encrypted bytes bidirectionally",
+        "No MITM — never see plaintext HTTPS content",
+        "Proper tunnel teardown on timeout/disconnect"
+      ],
+      "technical_notes": "CONNECT proxy creates a raw TCP tunnel. Different from HTTP proxy. Needs new message type for tunnel bytes."
+    },
+    {
+      "id": "6.2",
+      "name": "Backend: Domain blocklist management",
+      "wave": 6,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "backend",
+      "depends_on": ["5.1"],
+      "acceptance_criteria": [
+        "internal/proxy/filter.go with domain blocklist",
+        "SHA-256 hash-based matching (privacy preserving)",
+        "Categories per SECURITY.md: CSAM, malware, gov/mil, financial, healthcare",
+        "Rate-based blocking: >100 req/min to one domain per node",
+        "Admin API to update blocklist",
+        "Server-side filtering before routing to node"
+      ],
+      "technical_notes": "Hash-based so nodes never see actual blocked domains. Bloom filter for fast lookup optional."
+    },
+    {
+      "id": "6.3",
+      "name": "Backend: Blocklist distribution",
+      "wave": 6,
+      "priority": 1,
+      "complexity": "simple",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["6.2", "3.3"],
+      "acceptance_criteria": [
+        "Send blocklist hash set on REGISTER and via CONFIG_UPDATE",
+        "Include version hash so nodes only download on change",
+        "Redis pub/sub for broadcast to all orchestrator instances",
+        "Node acknowledges blocklist receipt"
+      ],
+      "technical_notes": "Compress hash set before sending. Delta updates for efficiency."
+    },
+    {
+      "id": "6.4",
+      "name": "Android: HTTPS CONNECT in ProxyEngine",
+      "wave": 6,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "android",
+      "depends_on": ["4.3"],
+      "acceptance_criteria": [
+        "Handle CONNECT-type proxy requests from WebSocket",
+        "Open TCP socket to destination",
+        "Relay bytes through WebSocket tunnel bidirectionally",
+        "Proper cleanup on timeout/disconnect",
+        "Works for HTTPS sites"
+      ],
+      "technical_notes": "Use java.net.Socket for raw TCP. Different path from HTTP proxy in ProxyEngine."
+    },
+    {
+      "id": "6.5",
+      "name": "Android: Domain filter",
+      "wave": 6,
+      "priority": 1,
+      "complexity": "simple",
+      "estimated_hours": 2,
+      "agent": "android",
+      "depends_on": ["6.3", "4.3"],
+      "acceptance_criteria": [
+        "DomainFilter class receiving blocklist from backend",
+        "Hash destination domain and check against blocklist set",
+        "Reject blocked domains with error response",
+        "Update blocklist on CONFIG_UPDATE messages",
+        "All test blocked domains correctly rejected"
+      ],
+      "technical_notes": "SHA-256 hash of domain. HashSet for O(1) lookup."
+    },
+    {
+      "id": "6.6",
+      "name": "Backend: Server-side metering (authoritative)",
+      "wave": 6,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "backend",
+      "depends_on": ["3.6"],
+      "acceptance_criteria": [
+        "internal/metering/counter.go counting WebSocket bytes in real-time",
+        "Server-measured bytes are authoritative (not client-reported)",
+        "Compare with client-reported metrics",
+        "Flag >10% divergence as potential fraud",
+        "Feed server-measured values into MeteringEvent"
+      ],
+      "technical_notes": "Count bytes at WebSocket frame level. Intercept read/write on connection."
+    },
+    {
+      "id": "7.1",
+      "name": "Android: Play Integrity integration",
+      "wave": 7,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "android",
+      "depends_on": ["4.2"],
+      "acceptance_criteria": [
+        "Google Play Integrity API integrated",
+        "Generate integrity token on registration",
+        "Periodic re-attestation (configurable interval)",
+        "Send token to POST /v1/node/attest",
+        "Graceful error handling (API unavailable, token generation failure)"
+      ],
+      "technical_notes": "play-integrity dependency from libs.versions.toml. Needs Google Play Services."
+    },
+    {
+      "id": "7.2",
+      "name": "Backend: Attestation verification",
+      "wave": 7,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["3.1"],
+      "acceptance_criteria": [
+        "internal/fraud/attestation.go verifying Play Integrity tokens",
+        "Verify via Google API: genuine device, genuine APK, not rooted",
+        "On failure: suspend earnings, log fraud_event, require re-attestation",
+        "POST /v1/node/attest endpoint",
+        "Periodic re-check not just at registration"
+      ],
+      "technical_notes": "Google Play Integrity API server-side verification. Store attestation timestamp per node."
+    },
+    {
+      "id": "7.3",
+      "name": "Android: ResourceMonitor enhancements",
+      "wave": 7,
+      "priority": 2,
+      "complexity": "simple",
+      "estimated_hours": 2,
+      "agent": "android",
+      "depends_on": ["4.4"],
+      "acceptance_criteria": [
+        "CPU temperature via Thermal API (Android 11+)",
+        "Network speed estimation",
+        "Memory pressure detection",
+        "Enhanced ResourceState with all fields",
+        "More granular pause/resume logic"
+      ],
+      "technical_notes": "PowerManager.THERMAL_STATUS_* for thermal. ActivityManager.MemoryInfo for memory."
+    },
+    {
+      "id": "7.4",
+      "name": "Backend: Node config push",
+      "wave": 7,
+      "priority": 2,
+      "complexity": "simple",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["3.3"],
+      "acceptance_criteria": [
+        "Push config updates via WebSocket CONFIG_UPDATE message",
+        "Config includes: earning rates, blocklist hash, max_concurrent, heartbeat interval",
+        "Redis pub/sub for multi-instance broadcast",
+        "Nodes apply config on receipt"
+      ],
+      "technical_notes": "Admin endpoint to trigger config push. All orchestrator instances receive via pub/sub."
+    },
+    {
+      "id": "7.5",
+      "name": "Android: Connection resilience",
+      "wave": 7,
+      "priority": 2,
+      "complexity": "simple",
+      "estimated_hours": 2,
+      "agent": "android",
+      "depends_on": ["4.2"],
+      "acceptance_criteria": [
+        "Jitter added to reconnect backoff (prevent thundering herd)",
+        "Session resume within 30s window (reuse registration)",
+        "Connection state machine: connecting→connected→reconnecting→disconnected",
+        "Backoff reset on successful connection"
+      ],
+      "technical_notes": "Random jitter = random(0, backoff * 0.3). Store session token for resume."
+    },
+    {
+      "id": "8.1",
+      "name": "Android: Dashboard screen",
+      "wave": 8,
+      "priority": 1,
+      "complexity": "complex",
+      "estimated_hours": 4,
+      "agent": "android",
+      "depends_on": ["5.3", "7.3"],
+      "acceptance_criteria": [
+        "Full dashboard per ANDROID-APP.md wireframe",
+        "Connection status toggle (ON/OFF with animation)",
+        "Today/all-time earnings with USD estimate",
+        "Bandwidth shared progress bar (upload/download)",
+        "Live stats: uptime, requests served, avg latency, trust score",
+        "7-day earnings trend chart",
+        "Material3 design with ProxyCoin branding"
+      ],
+      "technical_notes": "Use a Compose charting library (Vico or YCharts). Pull data from ViewModel."
+    },
+    {
+      "id": "8.2",
+      "name": "Android: DashboardViewModel",
+      "wave": 8,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "android",
+      "depends_on": ["8.1"],
+      "acceptance_criteria": [
+        "Collect from ProxyForegroundService (connection state, live stats)",
+        "Collect from EarningsRepository (today, all-time)",
+        "Collect from API (token price, trust score)",
+        "Expose DashboardUiState as StateFlow",
+        "Auto-refresh on service state changes"
+      ],
+      "technical_notes": "Combine multiple Flows with combine(). Handle loading/error states."
+    },
+    {
+      "id": "8.3",
+      "name": "Android: Earnings screen",
+      "wave": 8,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "android",
+      "depends_on": ["5.3"],
+      "acceptance_criteria": [
+        "Tab bar: Day/Week/Month/All",
+        "Earnings chart (line chart)",
+        "Breakdown table: bandwidth, uptime bonus, quality bonus, referral",
+        "Pending vs claimed amounts",
+        "Claim button (placeholder, wired in Phase 3)"
+      ],
+      "technical_notes": "Reuse charting library from dashboard. Tab state with rememberSaveable."
+    },
+    {
+      "id": "8.4",
+      "name": "Android: Settings screen (full)",
+      "wave": 8,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "android",
+      "depends_on": ["5.4"],
+      "acceptance_criteria": [
+        "Bandwidth: max slider (10-100%), WiFi-only, cellular toggle, cellular cap",
+        "Power: battery threshold slider (10-50%), charging-only toggle",
+        "Notifications: milestones, status, weekly summary toggles",
+        "Account: device ID, node ID, trust score, referral code",
+        "About: version, ToS link, privacy link, licenses",
+        "All persisted in DataStore"
+      ],
+      "technical_notes": "Compose Slider, Switch components. Grouped sections with headers."
+    },
+    {
+      "id": "8.5",
+      "name": "Android: Notification enhancements",
+      "wave": 8,
+      "priority": 2,
+      "complexity": "simple",
+      "estimated_hours": 1,
+      "agent": "android",
+      "depends_on": ["4.1"],
+      "acceptance_criteria": [
+        "Rich notification: connection state, today's earnings, bandwidth, uptime",
+        "Updated every 30s",
+        "Action buttons: pause/resume",
+        "Low-priority channel"
+      ],
+      "technical_notes": "NotificationCompat.Builder with RemoteViews for custom layout."
+    },
+    {
+      "id": "9.1",
+      "name": "Contracts: ProxyCoinToken.sol",
+      "wave": 9,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "contracts",
+      "depends_on": ["1.4"],
+      "acceptance_criteria": [
+        "ERC-20 with AccessControl per SMART-CONTRACTS.md",
+        "MINTER_ROLE, BURNER_ROLE constants",
+        "MAX_SUPPLY = 1_000_000_000 * 1e18",
+        "mint() with supply cap check, onlyRole(MINTER_ROLE)",
+        "burn() with onlyRole(BURNER_ROLE)",
+        "Constructor grants DEFAULT_ADMIN_ROLE to deployer",
+        "forge build succeeds"
+      ],
+      "technical_notes": "Import from @openzeppelin/contracts. Exact code in SMART-CONTRACTS.md."
+    },
+    {
+      "id": "9.2",
+      "name": "Contracts: RewardDistributor.sol",
+      "wave": 9,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "contracts",
+      "depends_on": ["9.1"],
+      "acceptance_criteria": [
+        "Merkle-based claims per SMART-CONTRACTS.md",
+        "setMerkleRoot(root) - onlyOwner, increments epoch",
+        "claim(cumulativeAmount, merkleProof) with MerkleProof.verify",
+        "Cumulative tracking: claimed mapping, claimable = cumulative - claimed",
+        "getClaimable() view function",
+        "Events: MerkleRootUpdated, RewardsClaimed",
+        "Calls token.mint() for new tokens"
+      ],
+      "technical_notes": "Double keccak256 for leaf to prevent second preimage attacks. Exact code in SMART-CONTRACTS.md."
+    },
+    {
+      "id": "9.3",
+      "name": "Contracts: Staking.sol",
+      "wave": 9,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "contracts",
+      "depends_on": ["9.1"],
+      "acceptance_criteria": [
+        "4-tier staking: 1K/5K/10K/50K PRXY thresholds",
+        "Lock periods: 30/30/60/90 days",
+        "stake(amount) - determine tier, transfer tokens, set lockUntil",
+        "unstake() - check lock period, return tokens",
+        "slash(staker, reason) - SLASHER_ROLE, 50% slash, burn slashed tokens",
+        "getStake() view",
+        "Events: Staked, Unstaked, Slashed"
+      ],
+      "technical_notes": "SafeERC20 for transfers. IBurnableToken interface for slash burns. Exact code in SMART-CONTRACTS.md."
+    },
+    {
+      "id": "9.4",
+      "name": "Contracts: Vesting.sol",
+      "wave": 9,
+      "priority": 2,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "contracts",
+      "depends_on": ["9.1"],
+      "acceptance_criteria": [
+        "createSchedule() with beneficiary, total, start, cliff, duration, revocable",
+        "release() calculates vested amount, transfers releasable",
+        "revoke() returns unvested to owner (if revocable)",
+        "getReleasable() view",
+        "Linear vesting after cliff",
+        "Events: VestingCreated, TokensReleased, VestingRevoked"
+      ],
+      "technical_notes": "Exact code in SMART-CONTRACTS.md. SafeERC20 for transfers."
+    },
+    {
+      "id": "9.5",
+      "name": "Contracts: Deploy script",
+      "wave": 9,
+      "priority": 1,
+      "complexity": "simple",
+      "estimated_hours": 2,
+      "agent": "contracts",
+      "depends_on": ["9.1", "9.2", "9.3", "9.4"],
+      "acceptance_criteria": [
+        "script/Deploy.s.sol deploying all 4 contracts in order",
+        "Token → RewardDistributor → Staking → Vesting",
+        "Grant MINTER_ROLE to RewardDistributor",
+        "Grant BURNER_ROLE to Staking",
+        "Log all deployed addresses",
+        "Works with forge script"
+      ],
+      "technical_notes": "Use forge Script. Broadcast transactions. Verify deployment order."
+    },
+    {
+      "id": "9.6",
+      "name": "Contracts: DistributeRewards script",
+      "wave": 9,
+      "priority": 2,
+      "complexity": "simple",
+      "estimated_hours": 1,
+      "agent": "contracts",
+      "depends_on": ["9.2"],
+      "acceptance_criteria": [
+        "script/DistributeRewards.s.sol calling setMerkleRoot() on RewardDistributor",
+        "Takes root as command-line input",
+        "Used by backend daily job"
+      ],
+      "technical_notes": "Simple script. Pass root via --sig or env var."
+    },
+    {
+      "id": "10.1",
+      "name": "Tests: ProxyCoinToken",
+      "wave": 10,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "contracts",
+      "depends_on": ["9.1"],
+      "acceptance_criteria": [
+        "Test mint: success, exceeds max supply revert, unauthorized revert",
+        "Test burn: success, unauthorized revert",
+        "Test role management: grant, revoke, renounce",
+        "Test transfer and approval",
+        "100% function coverage"
+      ],
+      "technical_notes": "Foundry test with setUp deploying token. Use vm.expectRevert for error cases."
+    },
+    {
+      "id": "10.2",
+      "name": "Tests: RewardDistributor",
+      "wave": 10,
+      "priority": 1,
+      "complexity": "complex",
+      "estimated_hours": 3,
+      "agent": "contracts",
+      "depends_on": ["9.2"],
+      "acceptance_criteria": [
+        "Test setMerkleRoot: owner success, non-owner revert, epoch increment",
+        "Test claim: valid proof success, invalid proof revert",
+        "Test double-claim prevention (cumulative accounting)",
+        "Test partial claim then full claim",
+        "Test getClaimable accuracy",
+        "Generate test Merkle trees in Solidity",
+        "100% function coverage"
+      ],
+      "technical_notes": "Build Merkle tree in test. Use murky library or manual tree construction."
+    },
+    {
+      "id": "10.3",
+      "name": "Tests: Staking",
+      "wave": 10,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "contracts",
+      "depends_on": ["9.3"],
+      "acceptance_criteria": [
+        "Test stake all 4 tiers with correct lock periods",
+        "Test unstake before lock (revert) and after lock (success)",
+        "Test slash: amount, burn, unauthorized revert",
+        "Test _getTier boundary values",
+        "Test already-staked rejection",
+        "100% function coverage"
+      ],
+      "technical_notes": "Use vm.warp to advance block.timestamp past lock periods."
+    },
+    {
+      "id": "10.4",
+      "name": "Tests: Vesting",
+      "wave": 10,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "contracts",
+      "depends_on": ["9.4"],
+      "acceptance_criteria": [
+        "Test createSchedule success and duplicate revert",
+        "Test release before cliff (0), during vest (proportional), after full vest",
+        "Test revoke: revocable success, non-revocable revert",
+        "Test getReleasable at various timestamps",
+        "100% function coverage"
+      ],
+      "technical_notes": "Use vm.warp for time manipulation. Test with multiple beneficiaries."
+    },
+    {
+      "id": "10.5",
+      "name": "Tests: Fuzz testing",
+      "wave": 10,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "contracts",
+      "depends_on": ["10.1", "10.2", "10.3", "10.4"],
+      "acceptance_criteria": [
+        "Fuzz tests (1000 runs) for mint amounts, claim amounts, stake amounts",
+        "Fuzz vesting calculations with random timestamps",
+        "Invariant: totalMinted <= MAX_SUPPLY",
+        "Invariant: claimed[user] <= cumulativeAmount",
+        "Invariant: vestedAmount <= schedule.total",
+        "All fuzz tests pass"
+      ],
+      "technical_notes": "Foundry fuzz with [fuzz] runs = 1000 in foundry.toml."
+    },
+    {
+      "id": "10.6",
+      "name": "Contracts: Deploy to Base Sepolia",
+      "wave": 10,
+      "priority": 1,
+      "complexity": "simple",
+      "estimated_hours": 1,
+      "agent": "contracts",
+      "depends_on": ["10.5"],
+      "acceptance_criteria": [
+        "All 4 contracts deployed to Base Sepolia testnet",
+        "Contracts verified on Basescan",
+        "Roles granted correctly",
+        "Addresses recorded in SMART-CONTRACTS.md",
+        "Manual test claim succeeds on testnet"
+      ],
+      "technical_notes": "Need BASE_SEPOLIA_RPC and DEPLOYER_KEY. Use forge script --broadcast."
+    },
+    {
+      "id": "11.1",
+      "name": "Android: WalletManager",
+      "wave": 11,
+      "priority": 1,
+      "complexity": "complex",
+      "estimated_hours": 4,
+      "agent": "android",
+      "depends_on": ["10.6"],
+      "acceptance_criteria": [
+        "BIP-39 mnemonic generation (12 words)",
+        "BIP-44 key derivation for Ethereum",
+        "Store private key encrypted in Android Keystore",
+        "getAddress() returns public wallet address",
+        "getBalance() queries ERC-20 balanceOf via Web3j",
+        "signMessage() for authentication",
+        "RPC via Alchemy/Infura for Base L2"
+      ],
+      "technical_notes": "Web3j 4.12.2 for Ethereum operations. BIP-39/BIP-44 via bitcoinj or custom implementation."
+    },
+    {
+      "id": "11.2",
+      "name": "Android: KeystoreHelper",
+      "wave": 11,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "android",
+      "depends_on": ["11.1"],
+      "acceptance_criteria": [
+        "Android Keystore wrapper for AES key generation",
+        "Encrypt/decrypt private key",
+        "Hardware-backed when available",
+        "Clear sensitive data from memory after use",
+        "Unit tests for encrypt/decrypt cycle"
+      ],
+      "technical_notes": "KeyGenParameterSpec with setUserAuthenticationRequired if biometrics available."
+    },
+    {
+      "id": "11.3",
+      "name": "Android: Mnemonic + backup flow",
+      "wave": 11,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "android",
+      "depends_on": ["11.1"],
+      "acceptance_criteria": [
+        "Generate BIP-39 mnemonic with proper entropy",
+        "Display words with 'write this down' warning",
+        "Confirmation: user selects words in correct order",
+        "Import flow: paste mnemonic or private key",
+        "Validate mnemonic checksum"
+      ],
+      "technical_notes": "Use BIP-39 word list. Validate checksum before accepting import."
+    },
+    {
+      "id": "11.4",
+      "name": "Android: TransactionBuilder",
+      "wave": 11,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "android",
+      "depends_on": ["11.1"],
+      "acceptance_criteria": [
+        "Build claim tx: RewardDistributor.claim(cumulativeAmount, merkleProof)",
+        "Build send tx: ERC-20 transfer(to, amount)",
+        "Gas estimation via Web3j gas oracle",
+        "Wait for 1 block confirmation on Base",
+        "Return TxHash on success, error on failure"
+      ],
+      "technical_notes": "Generate contract wrapper with Web3j CLI or manually encode ABI calls."
+    },
+    {
+      "id": "11.5",
+      "name": "Backend: Reward calculator",
+      "wave": 11,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "backend",
+      "depends_on": ["6.6"],
+      "acceptance_criteria": [
+        "internal/reward/calculator.go running hourly",
+        "Aggregate metering data per node for the epoch",
+        "Base reward = bytes/1e6 * PRXYPerMB",
+        "Apply multipliers: trust (0.5-2.0x), uptime (1.0-1.5x), quality (0.8-1.3x), staking (1.0-1.5x)",
+        "Insert into earnings table",
+        "Update claimable_rewards cumulative",
+        "Unit tests with mock metering data"
+      ],
+      "technical_notes": "Use cron or ticker for hourly execution. Match formula from BACKEND.md CalculateRewards."
+    },
+    {
+      "id": "11.6",
+      "name": "Backend: Merkle tree generator",
+      "wave": 11,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "backend",
+      "depends_on": ["11.5"],
+      "acceptance_criteria": [
+        "internal/reward/merkle.go running daily",
+        "Get all pending rewards from claimable_rewards table",
+        "Build leaves: keccak256(abi.encode(wallet, cumulativeAmount))",
+        "Build Merkle tree (binary tree, sorted pairs)",
+        "Store proofs in database per wallet",
+        "Return root hash for on-chain publishing",
+        "Unit tests with known tree"
+      ],
+      "technical_notes": "Match Solidity leaf encoding exactly: keccak256(bytes.concat(keccak256(abi.encode(addr, amount))))"
+    },
+    {
+      "id": "12.1",
+      "name": "Backend: Merkle root publisher",
+      "wave": 12,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["11.6", "10.6"],
+      "acceptance_criteria": [
+        "internal/reward/distributor.go calling setMerkleRoot on-chain",
+        "Go Ethereum client (go-ethereum/ethclient) for Base L2",
+        "Signs and submits transaction with backend wallet",
+        "Store tx hash in database",
+        "Retry on transient failures",
+        "Triggered after daily Merkle generation"
+      ],
+      "technical_notes": "Need deployer private key or separate publisher wallet. Use abigen for contract binding."
+    },
+    {
+      "id": "12.2",
+      "name": "Backend: Claim proof API",
+      "wave": 12,
+      "priority": 1,
+      "complexity": "simple",
+      "estimated_hours": 1,
+      "agent": "backend",
+      "depends_on": ["11.6"],
+      "acceptance_criteria": [
+        "GET /v1/rewards/proof returns Merkle proof for requesting node's wallet",
+        "Response: cumulativeAmount, proof array, current epoch",
+        "GET /v1/rewards/history returns claim history with tx hashes",
+        "401 for unauthenticated requests"
+      ],
+      "technical_notes": "Proof is array of bytes32 hashes. Return as hex strings."
+    },
+    {
+      "id": "12.3",
+      "name": "Android: Wallet screen",
+      "wave": 12,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "android",
+      "depends_on": ["11.1", "12.2"],
+      "acceptance_criteria": [
+        "PRXY balance (on-chain via Web3j)",
+        "Pending balance (off-chain from API)",
+        "Wallet address with QR code and copy button",
+        "Claim Rewards button: fetch proof → build tx → sign → submit",
+        "Send PRXY button with address input and amount",
+        "Transaction history list",
+        "Token price from DEX (optional: placeholder OK)",
+        "Block explorer link for transactions"
+      ],
+      "technical_notes": "Use ZXing or Compose QR library for QR code. Transaction list from Room DB + API."
+    },
+    {
+      "id": "12.4",
+      "name": "Android: WalletViewModel",
+      "wave": 12,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "android",
+      "depends_on": ["12.3"],
+      "acceptance_criteria": [
+        "Coordinate WalletManager (on-chain balance), API (pending, proof), TransactionBuilder",
+        "WalletUiState: balance, pending, transactions, loading, error",
+        "Claim flow: fetch proof → build tx → sign → submit → wait confirm → refresh",
+        "Send flow: validate address → build tx → sign → submit → refresh",
+        "Error handling for insufficient gas, failed tx"
+      ],
+      "technical_notes": "Use viewModelScope for coroutines. Handle all error states gracefully."
+    },
+    {
+      "id": "12.5",
+      "name": "Android: WalletSetupScreen",
+      "wave": 12,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "android",
+      "depends_on": ["11.3"],
+      "acceptance_criteria": [
+        "Create New Wallet: generate mnemonic → show backup → confirm words",
+        "Import Existing: paste mnemonic or private key → validate → import",
+        "Wallet address display with copy button after setup",
+        "Navigate to Dashboard after wallet setup",
+        "Persist wallet creation state (skip on subsequent launches)"
+      ],
+      "technical_notes": "Part of onboarding flow. Guard: if wallet exists, skip this screen."
+    },
+    {
+      "id": "12.6",
+      "name": "Integration: End-to-end claim flow",
+      "wave": 12,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["12.1", "12.2"],
+      "acceptance_criteria": [
+        "Test: node earns rewards → calculator runs → Merkle generated → root published",
+        "Node fetches proof from API",
+        "Node submits claim transaction to Base Sepolia",
+        "Verify PRXY tokens received in wallet",
+        "Full cycle validation end-to-end"
+      ],
+      "technical_notes": "Integration test against Base Sepolia. May need funded test wallet."
+    },
+    {
+      "id": "13.1",
+      "name": "Backend: Customer auth",
+      "wave": 13,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "backend",
+      "depends_on": ["2.3"],
+      "acceptance_criteria": [
+        "internal/auth/jwt.go: JWT generation (15 min expiry) and validation",
+        "internal/auth/apikey.go: API key generation (prxy_live_xxx format), bcrypt storage, rotation",
+        "Refresh tokens (7 day expiry)",
+        "Customer registration with email + bcrypt password",
+        "Middleware for JWT and API key authentication"
+      ],
+      "technical_notes": "golang-jwt/jwt/v5. API keys: crypto/rand for generation, bcrypt for storage."
+    },
+    {
+      "id": "13.2",
+      "name": "Backend: Customer registration + login",
+      "wave": 13,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["13.1"],
+      "acceptance_criteria": [
+        "POST /v1/auth/register: email + password → create customer → return JWT",
+        "POST /v1/auth/login: email + password → verify → return JWT + refresh",
+        "GET /v1/auth/apikey: return or rotate API key",
+        "Input validation (email format, password strength)",
+        "Rate limiting on login endpoint"
+      ],
+      "technical_notes": "Standard REST auth pattern. Return 409 for duplicate email."
+    },
+    {
+      "id": "13.3",
+      "name": "Backend: Proxy request endpoint",
+      "wave": 13,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "backend",
+      "depends_on": ["5.1", "13.1"],
+      "acceptance_criteria": [
+        "POST /v1/proxy per BACKEND.md request/response format",
+        "Authenticate via API key or JWT",
+        "Validate request body: url, method, geo, headers, timeout",
+        "Route to Orchestrator for node selection and proxy execution",
+        "Return formatted response with node info + metrics",
+        "Error responses: 408 timeout, 503 no nodes, 429 rate limit"
+      ],
+      "technical_notes": "Bridge between Customer API and Orchestrator. Base64 encode response body."
+    },
+    {
+      "id": "13.4",
+      "name": "Backend: Batch proxy endpoint",
+      "wave": 13,
+      "priority": 2,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["13.3"],
+      "acceptance_criteria": [
+        "POST /v1/proxy/batch accepts array of proxy requests",
+        "Execute concurrently (up to 10 parallel)",
+        "Return array of responses (success + failures)",
+        "Same auth and validation as single endpoint",
+        "Aggregate metrics"
+      ],
+      "technical_notes": "Use errgroup or worker pool. Return partial results if some fail."
+    },
+    {
+      "id": "13.5",
+      "name": "Backend: Usage tracking",
+      "wave": 13,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["13.3"],
+      "acceptance_criteria": [
+        "Record per-customer daily usage in customer_usage table",
+        "Track: requests, bytes_total, cost_usd",
+        "GET /v1/usage returns usage stats",
+        "GET /v1/usage/daily returns daily breakdown",
+        "Enforce plan limits (return 429 when exceeded)"
+      ],
+      "technical_notes": "Upsert daily record. Use COALESCE for incrementing counters."
+    },
+    {
+      "id": "13.6",
+      "name": "Backend: Rate limiting",
+      "wave": 13,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["3.5", "13.1"],
+      "acceptance_criteria": [
+        "Redis-based rate limiting per API key per day",
+        "Plan limits: Free 100, Starter 10K, Pro 100K, Enterprise custom",
+        "Return 429 with Retry-After header when exceeded",
+        "Redis key: ratelimit:{apiKey}:{date} with 24h TTL",
+        "Rate limit headers in responses"
+      ],
+      "technical_notes": "Use Redis INCR with EXPIRE. Sliding window or fixed window."
+    },
+    {
+      "id": "14.1",
+      "name": "Backend: Fraud detector",
+      "wave": 14,
+      "priority": 1,
+      "complexity": "complex",
+      "estimated_hours": 4,
+      "agent": "backend",
+      "depends_on": ["6.6", "7.2"],
+      "acceptance_criteria": [
+        "internal/fraud/detector.go detecting fraud patterns",
+        "Self-proxy verification (verify backend is only traffic source)",
+        "Emulator detection (via failed attestation)",
+        "Bandwidth inflation (server vs client byte divergence >10%)",
+        "Sybil detection (multiple nodes same IP range)",
+        "Log fraud_events with severity and details",
+        "Auto-actions: warning → trust reduction, critical → suspend/ban"
+      ],
+      "technical_notes": "Run as periodic job analyzing recent metering data. Alert on anomalies."
+    },
+    {
+      "id": "14.2",
+      "name": "Backend: IP intelligence",
+      "wave": 14,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "backend",
+      "depends_on": ["3.1"],
+      "acceptance_criteria": [
+        "Classify IP: residential, datacenter, VPN, proxy",
+        "Use GeoIP database (MaxMind GeoLite2) + ASN analysis",
+        "Datacenter/VPN IPs earn 0x",
+        "Cross-reference claimed location vs IP geolocation",
+        "Flag mismatches as potential fraud"
+      ],
+      "technical_notes": "MaxMind GeoLite2 ASN database. Update monthly. oschwald/maxminddb-golang."
+    },
+    {
+      "id": "14.3",
+      "name": "Backend: Behavioral analysis",
+      "wave": 14,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "backend",
+      "depends_on": ["6.6"],
+      "acceptance_criteria": [
+        "Detect sudden bandwidth spikes (>10x normal for node)",
+        "Detect no sleep cycles (24/7 = likely emulator)",
+        "Pattern correlation: multiple nodes from same IP range",
+        "New node ramp-up: 0.5x earnings for first 7 days",
+        "Generate fraud_events for detected patterns"
+      ],
+      "technical_notes": "Analyze rolling 24h/7d windows. Statistical thresholds for spike detection."
+    },
+    {
+      "id": "14.4",
+      "name": "Backend: Trust score calculator",
+      "wave": 14,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["14.1", "14.2", "14.3"],
+      "acceptance_criteria": [
+        "Weighted model per SECURITY.md: attestation 0.15, uptime 0.20, verification 0.25, IP 0.15, bandwidth 0.15, age 0.10",
+        "Score range 0.0-1.0",
+        "Earning multiplier: 0.5x (score=0.3) to 2.0x (score=1.0)",
+        "Below 0.3: suspend. Below 0.1: ban",
+        "Recalculated periodically (hourly)"
+      ],
+      "technical_notes": "Store in nodes table trust_score column. Update via cron or after metering aggregation."
+    },
+    {
+      "id": "14.5",
+      "name": "Backend: Fraud event logging",
+      "wave": 14,
+      "priority": 2,
+      "complexity": "simple",
+      "estimated_hours": 1,
+      "agent": "backend",
+      "depends_on": ["14.1"],
+      "acceptance_criteria": [
+        "Store fraud events in fraud_events table",
+        "Fields: node_id, event_type, severity, details (JSONB), action_taken",
+        "Auto-actions triggered by severity",
+        "Query endpoint for admin review"
+      ],
+      "technical_notes": "Simple INSERT. Admin API for viewing/resolving fraud events."
+    },
+    {
+      "id": "14.6",
+      "name": "Backend: Spot-check verification",
+      "wave": 14,
+      "priority": 2,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["5.1"],
+      "acceptance_criteria": [
+        "Send known URLs to nodes periodically",
+        "Verify response integrity (hash match)",
+        "Failed spot-checks reduce trust score",
+        "Track verification_pass_rate per node",
+        "Configurable spot-check frequency and URLs"
+      ],
+      "technical_notes": "Maintain list of test URLs with known response hashes. Run via goroutine ticker."
+    },
+    {
+      "id": "15.1",
+      "name": "Android: Onboarding flow",
+      "wave": 15,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "android",
+      "depends_on": ["12.5"],
+      "acceptance_criteria": [
+        "WelcomeScreen: logo, tagline, value props, Get Started CTA",
+        "PermissionsScreen: battery optimization, notifications with explanations",
+        "Flow into WalletSetupScreen",
+        "Only shown on first launch",
+        "Onboarding state persisted in DataStore",
+        "Skip to Dashboard if already completed"
+      ],
+      "technical_notes": "Use HorizontalPager for swipeable onboarding. Request permissions via ActivityResultContracts."
+    },
+    {
+      "id": "15.2",
+      "name": "Android: Referral screen",
+      "wave": 15,
+      "priority": 2,
+      "complexity": "simple",
+      "estimated_hours": 2,
+      "agent": "android",
+      "depends_on": ["15.3"],
+      "acceptance_criteria": [
+        "Unique referral code display",
+        "Share button (deep link intent)",
+        "Referral stats: count, total earnings from referrals",
+        "Referral list with per-referral earnings"
+      ],
+      "technical_notes": "Use Android sharesheet for sharing referral link."
+    },
+    {
+      "id": "15.3",
+      "name": "Backend: Referral system",
+      "wave": 15,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "backend",
+      "depends_on": ["3.1", "11.5"],
+      "acceptance_criteria": [
+        "Generate unique referral codes per node",
+        "POST /v1/referral/apply: link referee to referrer",
+        "5% of referee earnings shared to referrer",
+        "GET /v1/referral/stats + GET /v1/referral/code",
+        "Referral earnings in earnings breakdown",
+        "Stored in referrals table"
+      ],
+      "technical_notes": "Auto-generate code on node registration. Use nanoid for short codes."
+    },
+    {
+      "id": "15.4",
+      "name": "Backend: Billing system",
+      "wave": 15,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "backend",
+      "depends_on": ["13.5"],
+      "acceptance_criteria": [
+        "Plan management: free/starter($49)/pro($199)/enterprise",
+        "GET /v1/billing: billing summary",
+        "GET /v1/billing/invoices: invoice history",
+        "Invoice generation: period, requests, bytes, cost",
+        "Plan limits enforced in rate limiting"
+      ],
+      "technical_notes": "Simple billing without payment gateway for now. Track cost_usd in customer_usage."
+    },
+    {
+      "id": "15.5",
+      "name": "Backend: Geographic targeting",
+      "wave": 15,
+      "priority": 1,
+      "complexity": "simple",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["3.2"],
+      "acceptance_criteria": [
+        "NodeSelector supports country + region targeting from customer requests",
+        "GET /v1/status: available node counts by country/region",
+        "Customers can check coverage before requesting"
+      ],
+      "technical_notes": "Extend existing NodeSelector filter. Aggregate node counts from registry."
+    },
+    {
+      "id": "15.6",
+      "name": "Backend: Sticky sessions",
+      "wave": 15,
+      "priority": 2,
+      "complexity": "simple",
+      "estimated_hours": 1,
+      "agent": "backend",
+      "depends_on": ["3.5", "5.1"],
+      "acceptance_criteria": [
+        "session:{sessionID} → nodeID in Redis with 5min TTL",
+        "Customer sends session_id in proxy request",
+        "Selector checks Redis for existing binding",
+        "Route to same node if available, else new node + update binding"
+      ],
+      "technical_notes": "Simple Redis GET/SET with TTL. Fall back to normal selection if bound node offline."
+    },
+    {
+      "id": "16.1",
+      "name": "Android: Security hardening",
+      "wave": 16,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "android",
+      "depends_on": ["15.1"],
+      "acceptance_criteria": [
+        "Certificate pinning via OkHttp CertificatePinner",
+        "Root detection: su binary, Magisk, system modifications",
+        "Emulator detection: build props, sensor count, telephony",
+        "APK signature verification at runtime",
+        "Memory zeroing of sensitive data (keys, mnemonics)"
+      ],
+      "technical_notes": "CertificatePinner for API domain. Check multiple root indicators."
+    },
+    {
+      "id": "16.2",
+      "name": "Android: Release build config",
+      "wave": 16,
+      "priority": 1,
+      "complexity": "simple",
+      "estimated_hours": 1,
+      "agent": "android",
+      "depends_on": ["16.1"],
+      "acceptance_criteria": [
+        "ProGuard/R8 rules for aggressive obfuscation",
+        "Strip all Log calls in release builds",
+        "Signing config for release",
+        "Version name/code management",
+        "Release build type configuration",
+        "Release APK builds successfully"
+      ],
+      "technical_notes": "Keep Hilt, Room, Retrofit proguard rules. Strip Log.d/Log.v in release."
+    },
+    {
+      "id": "16.3",
+      "name": "Backend: API Gateway config",
+      "wave": 16,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "backend",
+      "depends_on": ["13.3"],
+      "acceptance_criteria": [
+        "Nginx or Caddy config for API gateway",
+        "TLS termination with Let's Encrypt",
+        "Rate limiting at gateway level",
+        "CORS strict origin allowlist",
+        "Request size limits",
+        "WebSocket upgrade support for /ws",
+        "Health check endpoints"
+      ],
+      "technical_notes": "infrastructure/nginx/nginx.conf. Separate upstream blocks for each service."
+    },
+    {
+      "id": "16.4",
+      "name": "Infrastructure: Production deployment",
+      "wave": 16,
+      "priority": 1,
+      "complexity": "standard",
+      "estimated_hours": 3,
+      "agent": "infrastructure",
+      "depends_on": ["16.3"],
+      "acceptance_criteria": [
+        "Production Docker Compose or K8s manifests",
+        "Service health checks and resource limits",
+        "Restart policies for all services",
+        "Log aggregation configuration",
+        "Separate configs for orchestrator, api, metering",
+        "Docker images build and run correctly"
+      ],
+      "technical_notes": "Multi-stage Dockerfiles for small images. Health check endpoints per service."
+    },
+    {
+      "id": "16.5",
+      "name": "Docs: API reference + legal",
+      "wave": 16,
+      "priority": 2,
+      "complexity": "standard",
+      "estimated_hours": 2,
+      "agent": "infrastructure",
+      "depends_on": ["13.3"],
+      "acceptance_criteria": [
+        "docs/api-reference.md with all Customer API endpoints",
+        "OpenAPI/Swagger spec or detailed markdown",
+        "docs/legal/terms-of-service.md skeleton per SECURITY.md",
+        "docs/legal/privacy-policy.md skeleton per SECURITY.md",
+        "docs/legal/acceptable-use.md per SECURITY.md content policy"
+      ],
+      "technical_notes": "Legal docs are skeletons requiring legal review. API docs from actual endpoint implementations."
+    },
+    {
+      "id": "16.6",
+      "name": "Integration: Full system E2E tests",
+      "wave": 16,
+      "priority": 1,
+      "complexity": "complex",
+      "estimated_hours": 3,
+      "agent": "backend",
+      "depends_on": ["16.3", "16.4"],
+      "acceptance_criteria": [
+        "Customer registers → gets API key → submits proxy request",
+        "Node receives and executes → response returned",
+        "Metering recorded → rewards calculated → Merkle generated",
+        "Claim on testnet succeeds",
+        "Test fraud detection triggers",
+        "Test rate limiting enforcement",
+        "All tests pass with clean setup/teardown"
+      ],
+      "technical_notes": "Docker Compose test environment. Go integration tests or shell scripts."
+    }
+  ]
+}
