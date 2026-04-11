@@ -1,0 +1,56 @@
+syntax = "proto3";
+package proxycoin.protocol.v1;
+option go_package = "github.com/gofullthrottle/proxy-coin/backend/pkg/protocol";
+option java_package = "com.proxycoin.app.protocol";
+option java_outer_classname = "NodeProto";
+
+// Node registration
+message RegisterRequest {
+  string device_id = 1;
+  string wallet_address = 2;
+  string app_version = 3;
+  string os_version = 4;
+  string device_model = 5;
+  string network_type = 6; // wifi, cellular
+  int32 max_concurrent = 7;
+}
+
+message RegisterResponse {
+  string node_id = 1;
+  NodeConfig config = 2;
+}
+
+message NodeConfig {
+  double prxy_per_mb = 1;
+  int32 heartbeat_interval_ms = 2;
+  int32 max_concurrent = 3;
+  bytes blocklist_hash = 4;
+  int64 blocklist_version = 5;
+}
+
+message Heartbeat {
+  string node_id = 1;
+  int64 uptime_seconds = 2;
+  int32 active_requests = 3;
+  float battery_level = 4;
+  bool is_charging = 5;
+  string network_type = 6;
+  float cpu_temperature = 7;
+  int64 bytes_proxied_since_last = 8;
+}
+
+message HeartbeatAck {
+  int64 server_time = 1;
+}
+
+message ConfigUpdate {
+  NodeConfig config = 1;
+}
+
+message EarningsUpdate {
+  double today_earnings = 1;
+  double all_time_earnings = 2;
+  double pending_claim = 3;
+  double trust_score = 4;
+  int64 requests_served_today = 5;
+}
