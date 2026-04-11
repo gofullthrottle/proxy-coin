@@ -1,0 +1,432 @@
+# Suggestions Right From the Jump
+
+> Strategic execution plan for Proxy Coin, ordered by risk-adjusted value.
+> Each recommendation includes probability estimates, reasoning, and decision gates.
+
+---
+
+## Core Thesis
+
+**Build the riskiest thing first. Validate before investing.**
+
+The #1 failure mode for crypto-incentivized infrastructure projects is building the token economics, community, and marketing *before* proving the core technology works reliably. Of the ~40 bandwidth-sharing projects launched since 2020, fewer than 10 have meaningful daily active nodes — and the ones that survived all started with a working product before tokenizing.
+
+---
+
+## Recommendation 1: Steel Thread First
+
+### What
+
+Build the thinnest possible end-to-end path: a Go WebSocket server that routes an HTTP request through an Android device and returns the response. No UI, no token, no database — just proof that the proxy tunnel works.
+
+### Why This First
+
+This is the **single highest-risk technical unknown** in the entire project. Everything else (token economics, UI, customer API) is known-solvable. But "can an Android phone reliably proxy web traffic over a WebSocket tunnel while managing battery, connectivity, and background execution?" is genuinely uncertain.
+
+If this doesn't work → the project is dead. If this works → everything else is execution.
+
+### How (Detailed)
+
+#### Step 1: Protocol Buffers (2-4 hours)
+
+Define the wire protocol that both Go and Kotlin will consume.
+
+```protobuf
+// protocol/proto/proxy.proto
+syntax = "proto3";
+package proxycoin;
+
+message ProxyRequest {
+  string request_id = 1;
+  string method = 2;      // GET, POST, etc.
+  string url = 3;
+  map<string, string> headers = 4;
+  bytes body = 5;
+  int32 timeout_ms = 6;
+}
+
+message ProxyResponse {
+  string request_id = 1;
+  int32 status_code = 2;
+  map<string, string> headers = 3;
+  bytes body = 4;
+  int64 bytes_transferred = 5;
+  int32 latency_ms = 6;
+}
+
+message RegisterRequest {
+  string device_id = 1;
+  string device_model = 2;
+  string os_version = 3;
+  string network_type = 4;  // wifi, cellular
+}
+
+message RegisterResponse {
+  string node_id = 1;
+  int32 max_concurrent = 2;
+}
+
+message Heartbeat {
+  int32 battery_percent = 1;
+  string network_type = 2;
+  int64 bytes_proxied = 3;
+  int32 requests_served = 4;
+}
+
+// Envelope wrapping all message types
+message Message {
+  enum Type {
+    REGISTER_REQUEST = 0;
+    REGISTER_RESPONSE = 1;
+    HEARTBEAT = 2;
+    PROXY_REQUEST = 3;
+    PROXY_RESPONSE = 4;
+  }
+  Type type = 1;
+  bytes payload = 2;  // serialized inner message
+}
+```
+
+Generate Go and Kotlin code:
+
+```bash
+# Go
+protoc --go_out=backend/pkg/protocol proto/proxy.proto
+
+# Kotlin (using protobuf-kotlin-lite for Android)
+protoc --kotlin_out=lite:android/app/src/main/java proto/proxy.proto
+```
+
+**Why protobuf over JSON**: At 1000 nodes × 5 concurrent requests × ~3 messages per request, that's 15,000 messages/second at scale. Protobuf is ~10x smaller and ~100x faster to parse than JSON. This matters for mobile battery (less CPU per message = less drain).
+
+#### Step 2: Go Backend — Minimal Orchestrator (1-2 days)
+
+A single Go binary with two responsibilities:
+
+1. **WebSocket server** (port 8080): Accept connections from Android nodes
+2. **HTTP API** (port 8081): Accept test proxy requests, route through a connected node
+
+```
+cmd/orchestrator/main.go    (~200 lines)
+internal/websocket/server.go (~150 lines)
+internal/proxy/router.go     (~100 lines)
+```
+
+Key implementation decisions:
+- Use `gorilla/websocket` (most mature Go WebSocket library, 20K+ GitHub stars)
+- Use `net/http` for the test API (no framework needed for PoC)
+- In-memory node registry (just a `sync.Map` — no database yet)
+- Single-node selection (pick first available — no geo-targeting yet)
+
+**Test without Android**: Use `websocat` (CLI WebSocket client) to simulate a node:
+```bash
+# Terminal 1: Start server
+go run cmd/orchestrator/main.go
+
+# Terminal 2: Simulate node connection
+websocat ws://localhost:8080/ws
+
+# Terminal 3: Send test proxy request
+curl "http://localhost:8081/test?url=https://httpbin.org/ip"
+```
+
+**Deploy option**: Run on homelab via Docker Swarm. The Go binary compiles to a ~10MB static binary.
+
+#### Step 3: Android App — Bare Minimum (3-5 days)
+
+A single-activity app with a foreground service:
+
+```
+ProxyForegroundService.kt  — WebSocket + proxy engine
+MainActivity.kt           — ON/OFF toggle + status text
+```
+
+That's it. Two files of substance.
+
+**The foreground service**:
+1. Starts as `START_STICKY` (Android restarts it if killed)
+2. Creates persistent notification ("Proxy Coin — Connected, 0 requests served")
+3. Connects to backend via `OkHttp` WebSocket client
+4. On receiving `PROXY_REQUEST`: executes the HTTP request, sends back `PROXY_RESPONSE`
+5. Updates notification count
+
+**Critical Android gotchas** (learned from Honeygain/EarnApp teardowns):
+- Must request `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` or Android kills the service within minutes
+- Must hold a `PARTIAL_WAKE_LOCK` or CPU sleeps and WebSocket dies
+- Must hold a `WifiManager.WifiLock` or WiFi radio powers down
+- `START_STICKY` alone is NOT enough — Samsung/Xiaomi/Huawei have aggressive kill policies
+- Need to handle `onTaskRemoved()` to restart service when user swipes app away
+
+#### Step 4: The Validation Test (1 hour)
+
+```bash
+# On your laptop/homelab:
+curl "http://orchestrator:8081/test?url=https://httpbin.org/ip"
+
+# Expected response:
+{
+  "origin": "73.xxx.xxx.xxx"  ← This is the PHONE's residential IP
+}
+
+# Verify it's NOT the server's IP:
+curl https://httpbin.org/ip
+# {"origin": "100.108.180.29"}  ← Server IP (different)
+```
+
+**If these two IPs are different, the core concept is validated.**
+
+### Probability Assessment
+
+| Outcome | Probability | Reasoning |
+|---------|------------|-----------|
+| WebSocket tunnel works on WiFi | **95%** | Well-proven pattern (Honeygain, Grass, EarnApp all use this). OkHttp WebSocket is battle-tested. |
+| Survives Android background kill (with proper WakeLocks) | **80%** | Foreground services with `START_STICKY` + WakeLock work on stock Android. OEM-specific kill policies (Samsung, Xiaomi) are the 20% risk — may need device-specific workarounds. |
+| Works on cellular networks | **85%** | Most cellular networks don't block outbound WebSocket. Some aggressive carrier NATs may cause frequent disconnects, but reconnection logic handles this. |
+| Latency overhead < 200ms | **90%** | WebSocket adds ~10-30ms. Protobuf serialization adds ~1ms. Main variable is the phone's network latency, which is ~50-150ms on WiFi, ~100-300ms on cellular. |
+| Battery drain < 5%/hour | **70%** | This is the hardest constraint. Keeping WiFi + CPU active drains battery. Honeygain reports ~3-4%/hour, but this varies wildly by device. May need aggressive tuning. |
+
+**Composite probability of "PoC works well enough to continue"**: ~75-80%
+
+**If it fails**: The most likely failure mode is Android OEM background restrictions. Mitigation: Maintain a "device compatibility list" and focus on stock Android / Pixel devices initially. The 20% failure case is "works on some devices but not others" — which is manageable, not fatal.
+
+### Decision Gate
+
+**After 1-2 weeks**, evaluate:
+
+| Signal | Go | No-Go |
+|--------|----|-------|
+| Proxy success rate | > 85% | < 50% |
+| Battery drain | < 5%/hour | > 10%/hour |
+| WebSocket stability (24h) | < 5 reconnects | > 20 reconnects |
+| Latency overhead | < 300ms | > 1000ms |
+
+---
+
+## Recommendation 2: Legal Opinion in Parallel
+
+### What
+
+Engage a crypto-specialized law firm to provide a written opinion on PRXY token classification under US, EU, and key Asian jurisdictions.
+
+### Why in Parallel
+
+Legal opinions take **4-8 weeks** from engagement. The token isn't needed until Phase 3 (week 12-18). Starting legal work during Phase 1 means the opinion is ready exactly when you need it — zero wasted time.
+
+### How
+
+1. **Identify firms** (1-2 days): Anderson Kill, Debevoise, Cooley, or Fenwick & West all have crypto practices. Smaller crypto-native firms like Variant Fund's legal partners or OpenZeppelin's recommended counsel may be faster and cheaper.
+
+2. **Prepare brief** (already done): TOKENOMICS.md contains everything a lawyer needs — supply, allocation, utility mechanics, earning model.
+
+3. **Key questions to answer**:
+   - Is PRXY a security under Howey test? (Likely no: utility token with immediate use — paying for bandwidth)
+   - Money transmitter implications? (We don't hold user funds; tokens are earned, not purchased through us)
+   - GDPR/data considerations for EU users as proxy nodes?
+   - MiCA classification under EU crypto regulation?
+
+### Probability Assessment
+
+| Outcome | Probability | Reasoning |
+|---------|------------|-----------|
+| PRXY classified as utility token (not security) | **70%** | Strong utility argument: token is immediately usable (pay for bandwidth, stake for multiplier). No expectation of profit from "efforts of others." But post-SEC-crackdown environment means nothing is certain. |
+| Need to exclude US from token sale | **60%** | Many projects exclude US from initial token sale as precaution, even with utility classification. Can still allow US users to *earn* PRXY (earning ≠ buying). |
+| Need KYC for large earners | **50%** | FinCEN may require KYC above certain thresholds. Most projects implement optional KYC with earning caps for non-KYC users. |
+| Legal costs | $15-40K | Standard range for comprehensive crypto legal opinion from reputable firm |
+
+### Decision Gate
+
+**If classified as security**: Pivot to a points-based system (like Grass's initial approach — earn points, convert to token later after regulatory clarity). This is a delay, not a death sentence.
+
+**If classified as utility**: Proceed with token launch on Base L2 as planned.
+
+---
+
+## Recommendation 3: Demand Validation Before Supply
+
+### What
+
+Before building a 10,000-node network, validate that **customers will actually pay** for residential proxy bandwidth from your network. Pre-sell to 3-5 customers.
+
+### Why
+
+The biggest business risk isn't "can we build it" — it's "will anyone pay for it." The residential proxy market has established players (Bright Data, Oxylabs) with enterprise relationships. A new entrant needs a compelling reason to switch.
+
+### How
+
+1. **Manual proxy service** (Week 4-8, while PoC is running):
+   - Set up 10-20 devices (your own phones, friends, family) running the PoC app
+   - Offer manual proxy access to web scraping companies at 50% of Bright Data's rate
+   - Use a simple API wrapper that routes requests through your test nodes
+
+2. **Target customer segments** (easiest to hardest):
+   - **Small web scraping startups** (< $1K/mo budget): Price-sensitive, willing to try new providers
+   - **SEO tool companies**: Need residential IPs for rank checking
+   - **Ad verification**: Need diverse residential IPs to verify ad placement
+   - **AI data companies**: Growing demand for residential web crawling
+
+3. **Outreach channels**:
+   - r/webscraping, r/datacenter Reddit communities
+   - Web scraping Discord servers
+   - Direct outreach to companies listed on G2 under "web scraping tools"
+   - Product Hunt launch of free tier
+
+### Probability Assessment
+
+| Outcome | Probability | Reasoning |
+|---------|------------|-----------|
+| Find 3+ paying customers within 8 weeks | **55%** | Residential proxy is a proven market with clear demand. Price advantage helps. But enterprise sales cycles are long, and trust in new provider is low. Small startups are the most likely early adopters. |
+| Achieve $1K+ MRR within 3 months | **40%** | Requires ~250 GB/month at $4/GB. Possible with 3-5 small customers. Market rate for residential proxy is $5-15/GB so our pricing is competitive. |
+| Bright Data or Oxylabs notices and competes | **< 5%** | We're too small to register on their radar for 12+ months. They're focused on enterprise, not crypto-incentivized P2P. |
+
+### Decision Gate
+
+| Signal | Go | Pivot |
+|--------|----|-------|
+| Paying customers | 3+ within 8 weeks | 0 after 12 weeks |
+| Revenue | > $500/mo | $0 after 3 months |
+| Customer feedback | "Need more geo coverage" | "Quality too unreliable" |
+
+**If no customers**: The technology still works — pivot to compute-only (WASM tasks), or license the proxy network to an existing proxy provider as white-label infrastructure.
+
+---
+
+## Recommendation 4: Token After Traction, Not Before
+
+### What
+
+Don't launch the PRXY token until you have:
+1. A working proxy network (100+ nodes)
+2. At least 3 paying customers
+3. Legal opinion in hand
+
+Use a **points system** during Phase 1-2. Convert points to tokens at a known ratio when the token launches.
+
+### Why
+
+**Premature token launch is the #1 killer of crypto infrastructure projects.** Here's the pattern:
+
+1. Launch token → price spikes on hype
+2. No product yet → price crashes
+3. Team demoralized, community angry
+4. Product eventually ships but token never recovers
+
+Projects that launched product first, then tokenized: **Helium** (had 30K hotspots before token), **Filecoin** (had working storage network), **Grass** (had 2M+ browser extensions running before GRASS token).
+
+### How
+
+1. **Phase 1-2**: Users earn "Proxy Points" tracked in PostgreSQL
+2. **Phase 3**: When legal opinion is ready + network has 100+ nodes:
+   - Announce conversion ratio (e.g., 1 point = 1 PRXY)
+   - Deploy contracts to testnet, test claim flow
+   - Convert points to on-chain tokens
+3. **Benefit**: Early users feel rewarded (their points convert 1:1), and you avoided the "token with no product" trap
+
+### Probability Assessment
+
+| Outcome | Probability | Reasoning |
+|---------|------------|-----------|
+| Points system motivates early adopters | **65%** | Points with a promised token conversion work (Grass proved this with 2M+ users earning points pre-token). But without token price speculation, growth is slower than with a live token. |
+| Smooth points → token conversion | **90%** | Technically straightforward. Snapshot point balances, generate Merkle tree, deploy contracts, enable claims. |
+| Token price holds post-launch (if product exists first) | **60%** | Having a working network with revenue fundamentals is the strongest possible launch position. Still subject to broader crypto market conditions. |
+
+---
+
+## Recommendation 5: Open Source the Proxy Engine
+
+### What
+
+Open-source the Android proxy engine (the foreground service + WebSocket client + HTTP proxy). Keep the backend orchestrator, anti-fraud system, and token contracts proprietary.
+
+### Why
+
+1. **Trust**: Users are literally routing strangers' web traffic through their phone. Closed-source proxy engine = "trust us." Open-source = "audit it yourself." This is a massive differentiator vs. Honeygain, EarnApp, and Grass (all closed-source).
+
+2. **Community contributions**: Android OEM-specific workarounds for background execution are the hardest part. Open source means the community helps solve Samsung/Xiaomi/Huawei kill policies.
+
+3. **Defensibility paradox**: The proxy engine itself has no moat — it's commodity code. The moat is the network (nodes + customers), anti-fraud system, and token economics. Open-sourcing the commodity part signals confidence and doesn't give away the valuable parts.
+
+### Probability Assessment
+
+| Outcome | Probability | Reasoning |
+|---------|------------|-----------|
+| Increases user trust and adoption | **75%** | Crypto-native users strongly prefer open-source. Signal's success vs. WhatsApp in privacy-conscious markets is analogous. |
+| Competitors copy the proxy engine | **80%** | They will copy it. Doesn't matter — the proxy engine is the easy part. Network effects and anti-fraud are the moat. |
+| Meaningful community contributions | **40%** | Most open-source projects get very few contributors. Expect maybe 2-5 active contributors in the first year. Still worth it for trust. |
+
+---
+
+## Recommendation 6: Start With One Geography
+
+### What
+
+Launch in a single country first (US recommended). Don't try to support 100+ countries on day one.
+
+### Why
+
+1. **Legal simplicity**: One jurisdiction to understand initially
+2. **Customer value**: US residential IPs are the most valuable ($5-15/GB vs $2-5/GB for other countries). Customers pay premium for US proxies.
+3. **Debugging**: Easier to diagnose network issues when all nodes are in similar network environments
+4. **Anti-fraud**: Simpler IP intelligence when focused on US ISPs
+
+### How
+
+- Geo-restrict the app to US Google Play Store initially
+- Accept US-based devices only (verify via IP geolocation at registration)
+- Expand to EU, then Asia after 3 months of stable operation
+
+### Probability Assessment
+
+| Outcome | Probability | Reasoning |
+|---------|------------|-----------|
+| Sufficient node density in US alone | **85%** | US has 300M+ smartphones. Even 0.001% penetration = 3,000 nodes, which is plenty for launch. |
+| Customers accept US-only initially | **70%** | Many use cases (ad verification, SEO, price monitoring) are US-focused. Some customers need global coverage and will wait. |
+
+---
+
+## Execution Timeline (Recommended)
+
+```
+Week 1-2:   Steel thread (protobuf + Go backend + minimal Android)
+Week 2:     Engage crypto lawyer (parallel)
+Week 3-4:   Harden Android (battery, reconnection, OEM compatibility)
+Week 5-6:   Add HTTPS tunneling, domain filtering
+Week 6-8:   Manual demand validation (10-20 test devices, outreach to customers)
+Week 8:     DECISION GATE — Go/No-Go on token development
+Week 9-12:  Points system live, basic dashboard UI
+Week 12-14: Token development (if legal opinion + traction supports it)
+Week 14-16: Testnet token, claim flow
+Week 16-20: Beta launch (mainnet token, customer API, 500+ nodes)
+```
+
+---
+
+## Risk-Adjusted Priority Matrix
+
+| Priority | Action | Risk Mitigated | Cost if Skipped |
+|----------|--------|---------------|----------------|
+| **1** | Steel thread PoC | Technical feasibility | Build on unproven foundation |
+| **2** | Legal opinion (parallel) | Regulatory | 4-8 week delay at Phase 3 |
+| **3** | Demand validation | Market risk | Build supply with no demand |
+| **4** | Points before token | Premature token death spiral | Token crashes, community lost |
+| **5** | Open source proxy engine | Trust deficit | Slower adoption in crypto community |
+| **6** | Single geography | Operational complexity | Spread too thin, poor quality everywhere |
+
+---
+
+## Interactive Flow Diagram
+
+See the companion file for a full interactive decision tree and execution flow:
+
+**[000-interactive-flow.html](./000-interactive-flow.html)** — Open in any browser. Click nodes to expand details, hover for probability assessments, and trace decision paths.
+
+---
+
+## Glossary
+
+| Term | Definition | Origin |
+|------|-----------|--------|
+| **Steel thread** | Thinnest end-to-end path through all system layers | Defense/aerospace systems engineering |
+| **Tracer bullet** | Same concept as steel thread | *The Pragmatic Programmer* (1999) |
+| **Walking skeleton** | Minimal implementation of all architectural components | Alistair Cockburn |
+| **Decision gate** | Go/no-go checkpoint with explicit criteria | Stage-Gate product development (Cooper, 1990) |
+| **Points → token** | Earn off-chain credits, convert to on-chain token later | Common in crypto (Grass, Blur, EigenLayer all used this) |
