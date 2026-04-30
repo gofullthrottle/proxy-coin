@@ -28,7 +28,7 @@ jobs:
   # ===========================================================================
   quality-circuit:
     name: Quality Circuit
-    runs-on: [self-hosted, sonarqube]
+    runs-on: ubuntu-latest  # opt-in self-hosted: see ~/swarm/templates/github-runner/add-runner.sh
 
     steps:
       - name: Checkout code
@@ -88,7 +88,7 @@ jobs:
   # ===========================================================================
   sonarqube:
     name: SonarQube Analysis
-    runs-on: [self-hosted, sonarqube]
+    runs-on: ubuntu-latest  # opt-in self-hosted: see ~/swarm/templates/github-runner/add-runner.sh
     needs: quality-circuit
 
     steps:
@@ -120,7 +120,7 @@ jobs:
   # ===========================================================================
   e2e-tests:
     name: E2E Tests
-    runs-on: [self-hosted, sonarqube]
+    runs-on: ubuntu-latest  # opt-in self-hosted: see ~/swarm/templates/github-runner/add-runner.sh
     needs: quality-circuit
     if: github.ref == 'refs/heads/dev'
 
@@ -159,7 +159,7 @@ jobs:
   # ===========================================================================
   promotion-check:
     name: Promotion Quality Gate
-    runs-on: [self-hosted, sonarqube]
+    runs-on: ubuntu-latest  # opt-in self-hosted: see ~/swarm/templates/github-runner/add-runner.sh
     needs: [sonarqube, e2e-tests]
     if: github.event_name == 'pull_request' && (github.base_ref == 'main' || github.base_ref == 'master')
 
